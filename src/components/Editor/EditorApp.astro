@@ -1,0 +1,224 @@
+<section class="max-w-7xl mx-auto px-4 py-6">
+  <div id="compat-warn" class="hidden mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200"></div>
+  <div id="compat-block" class="hidden mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200"></div>
+
+  <div id="stage-drop" class="dropzone p-10 md:p-16 text-center cursor-pointer">
+    <input id="file-input" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v,.mp4,.mov,.webm,.m4v" class="hidden" />
+    <p class="text-2xl font-semibold text-white mb-2">把视频拖到这里</p>
+    <p class="text-slate-400 mb-6">支持 MP4 / MOV / WebM。识别、编辑、导出都在浏览器里完成。</p>
+    <div class="flex items-center justify-center gap-3 flex-wrap">
+      <button id="pick-file" type="button" class="btn-burn">选择视频</button>
+      <button id="try-sample" type="button" class="btn-ghost">试用示例视频</button>
+    </div>
+    <p class="mt-5 text-xs text-slate-500">首次自动识别需要下载 Whisper 模型（约 286–463 MB），之后会缓存在浏览器里。</p>
+  </div>
+
+  <div id="stage-editor" class="hidden">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div class="min-w-0">
+        <p id="file-name" class="text-white font-medium truncate"></p>
+        <p id="file-meta" class="text-xs text-slate-400"></p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button id="undo-btn" type="button" class="btn-ghost" title="撤销">撤销</button>
+        <button id="redo-btn" type="button" class="btn-ghost" title="重做">重做</button>
+        <button id="save-project-btn" type="button" class="btn-ghost">保存工程</button>
+        <button id="load-project-btn" type="button" class="btn-ghost">打开工程</button>
+        <input id="project-file-input" type="file" accept="application/json,.json" class="hidden" />
+        <button id="reset-btn" type="button" class="btn-ghost">换一个视频</button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] gap-4">
+      <div class="space-y-3">
+        <div id="preview-wrap" class="relative overflow-hidden rounded-xl bg-black border border-slate-800" style="aspect-ratio: 16 / 9;">
+          <canvas id="preview-canvas" class="absolute inset-0 h-full w-full object-contain"></canvas>
+          <video id="hidden-video" class="hidden" playsinline></video>
+          <div id="preview-status" class="hidden absolute inset-x-3 bottom-3 rounded-lg bg-black/70 px-3 py-2 text-xs text-slate-200"></div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="play-pause" type="button" class="btn-ghost !px-3">播放</button>
+          <button id="mute-toggle" type="button" class="btn-ghost !px-3" title="静音">🔊</button>
+          <input id="seek-bar" type="range" min="0" max="1" step="0.01" value="0" class="flex-1 accent-orange-500" />
+          <span id="time-display" class="text-xs text-slate-400 mono w-24 text-right">0:00 / 0:00</span>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <p class="text-xs text-slate-400">时间轴 · 点击色块跳转并选中字幕</p>
+            <p id="timeline-hint" class="text-xs text-slate-500"></p>
+          </div>
+          <div id="timeline" class="relative h-12 rounded-lg border border-slate-800 bg-slate-900/70 overflow-hidden">
+            <div id="timeline-blocks" class="absolute inset-0"></div>
+            <div id="timeline-playhead" class="absolute top-0 bottom-0 w-px bg-white/80 pointer-events-none" style="left: 0;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <section class="rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <h2 class="text-sm font-semibold text-white">字幕</h2>
+            <p id="caption-status" class="text-xs text-slate-400 truncate text-right">先自动识别，或手动加一行</p>
+          </div>
+          <div id="caption-progress" class="hidden mb-3">
+            <div class="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+              <div id="caption-bar" class="h-full brand-gradient transition-all" style="width: 0%"></div>
+            </div>
+          </div>
+          <div id="captions-list" class="space-y-2 max-h-[280px] overflow-y-auto rounded-lg border border-slate-800/60 bg-ink/40 p-2">
+            <div class="text-xs text-slate-500 text-center py-6">还没有字幕。</div>
+          </div>
+          <div class="flex flex-wrap gap-2 mt-3">
+            <button id="caption-btn" type="button" class="btn-burn !py-2 !px-3 text-sm" disabled>自动识别</button>
+            <button id="add-line-btn" type="button" class="btn-ghost">加一行</button>
+            <button id="split-btn" type="button" class="btn-ghost" title="在当前播放位置拆开选中的句子">拆分</button>
+            <button id="merge-btn" type="button" class="btn-ghost" title="与下一句合并">合并</button>
+            <button id="import-subs-btn" type="button" class="btn-ghost">导入 SRT/VTT</button>
+            <input id="subs-file-input" type="file" accept=".srt,.vtt,text/vtt" class="hidden" />
+            <button id="export-srt-btn" type="button" class="btn-ghost">导出 SRT</button>
+            <button id="export-vtt-btn" type="button" class="btn-ghost">导出 VTT</button>
+          </div>
+          <div class="grid grid-cols-2 gap-2 mt-3">
+            <label class="text-xs text-slate-400">
+              识别语言
+              <select id="ctl-language" class="mt-1 w-full bg-ink-soft border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white">
+                <option value="zh" selected>中文</option>
+                <option value="en">英语</option>
+                <option value="ja">日语</option>
+                <option value="ko">韩语</option>
+                <option value="es">西班牙语</option>
+                <option value="fr">法语</option>
+                <option value="de">德语</option>
+                <option value="pt">葡萄牙语</option>
+                <option value="ru">俄语</option>
+                <option value="vi">越南语</option>
+                <option value="th">泰语</option>
+                <option value="id">印尼语</option>
+                <option value="ar">阿拉伯语</option>
+                <option value="hi">印地语</option>
+              </select>
+            </label>
+            <label class="text-xs text-slate-400">
+              样式预设
+              <select id="preset-select" class="mt-1 w-full bg-ink-soft border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white">
+                <option value="clean-bottom">底部白字</option>
+                <option value="tiktok-neon">霓虹描边</option>
+                <option value="bold-white">大字描边</option>
+                <option value="karaoke">逐词高亮</option>
+                <option value="cinema">电影字幕</option>
+                <option value="custom">自定义</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="rounded-xl border border-slate-800 bg-slate-900/40 p-3 space-y-3">
+          <h2 class="text-sm font-semibold text-white">样式</h2>
+          <div class="grid grid-cols-2 gap-2 text-xs text-slate-400">
+            <label>字体
+              <select id="ctl-font" class="mt-1 w-full bg-ink-soft border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white">
+                <option>Inter</option>
+                <option>Arial</option>
+                <option>Georgia</option>
+                <option>Impact</option>
+              </select>
+            </label>
+            <label>字重
+              <select id="ctl-weight" class="mt-1 w-full bg-ink-soft border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white">
+                <option value="500">中</option>
+                <option value="700" selected>粗</option>
+                <option value="800">特粗</option>
+                <option value="900">最粗</option>
+              </select>
+            </label>
+            <label>字号 <span id="size-val">4.8%</span>
+              <input id="ctl-size" type="range" min="3" max="12" step="0.1" value="4.8" class="w-full accent-orange-500" />
+            </label>
+            <label>字距 <span id="tracking-val">0.0%</span>
+              <input id="ctl-tracking" type="range" min="-3" max="8" step="0.1" value="0" class="w-full accent-orange-500" />
+            </label>
+            <label>文字颜色
+              <div class="mt-1 flex gap-1">
+                <input id="ctl-color" type="color" value="#FFFFFF" class="h-8 w-10 bg-transparent border-0" />
+                <input id="ctl-color-text" type="text" value="#FFFFFF" class="flex-1 bg-ink-soft border border-slate-700 rounded px-2 text-white" />
+              </div>
+            </label>
+            <label>描边颜色
+              <div class="mt-1 flex gap-1">
+                <input id="ctl-stroke" type="color" value="#000000" class="h-8 w-10 bg-transparent border-0" />
+                <input id="ctl-stroke-text" type="text" value="#000000" class="flex-1 bg-ink-soft border border-slate-700 rounded px-2 text-white" />
+              </div>
+            </label>
+            <label>描边粗细 <span id="stroke-width-val">0%</span>
+              <input id="ctl-stroke-width" type="range" min="0" max="12" step="1" value="0" class="w-full accent-orange-500" />
+            </label>
+            <label>垂直偏移 <span id="offset-val">10%</span>
+              <input id="ctl-offset-y" type="range" min="0" max="30" step="1" value="10" class="w-full accent-orange-500" />
+            </label>
+            <label>位置
+              <select id="ctl-position" class="mt-1 w-full bg-ink-soft border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white">
+                <option value="top">顶部</option>
+                <option value="center">居中</option>
+                <option value="bottom" selected>底部</option>
+              </select>
+            </label>
+            <label>对齐
+              <select id="ctl-align" class="mt-1 w-full bg-ink-soft border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white">
+                <option value="left">左</option>
+                <option value="center" selected>中</option>
+                <option value="right">右</option>
+              </select>
+            </label>
+            <label>动画
+              <select id="ctl-animation" class="mt-1 w-full bg-ink-soft border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white">
+                <option value="none">无</option>
+                <option value="fade" selected>淡入</option>
+                <option value="pop">弹出</option>
+                <option value="bounce">弹跳</option>
+                <option value="typewriter">打字机</option>
+                <option value="karaoke">逐词高亮</option>
+              </select>
+            </label>
+            <label>阴影
+              <select id="ctl-shadow" class="mt-1 w-full bg-ink-soft border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white">
+                <option value="none">无</option>
+                <option value="soft" selected>柔和</option>
+                <option value="hard">硬边</option>
+              </select>
+            </label>
+          </div>
+          <div class="flex flex-wrap items-center gap-4 text-xs text-slate-300">
+            <label class="inline-flex items-center gap-2"><input id="ctl-uppercase" type="checkbox" /> 全部大写</label>
+            <label class="inline-flex items-center gap-2"><input id="ctl-italic" type="checkbox" /> 斜体</label>
+            <label class="inline-flex items-center gap-2"><input id="ctl-bg-enabled" type="checkbox" checked /> 背景框</label>
+            <label class="inline-flex items-center gap-2">背景色 <input id="ctl-bg" type="color" value="#000000" class="h-6 w-8 bg-transparent border-0" /></label>
+            <label class="inline-flex items-center gap-2">不透明度 <input id="ctl-bg-opacity" type="range" min="0" max="100" value="55" class="w-20 accent-orange-500" /></label>
+          </div>
+        </section>
+
+        <section class="rounded-xl border border-slate-800 bg-slate-900/40 p-3 space-y-3">
+          <h2 class="text-sm font-semibold text-white">导出成片</h2>
+          <button id="burn-btn" type="button" class="btn-burn w-full" disabled>烧录并下载 MP4</button>
+          <p id="burn-hint" class="text-xs text-slate-500">先生成或导入字幕，改好后再导出。内部始终是可编辑 JSON，只有这里才会把字幕压进画面。</p>
+          <div id="burn-progress" class="hidden space-y-1">
+            <div class="flex justify-between text-xs text-slate-400">
+              <span id="burn-stage">准备中…</span>
+              <span id="burn-percent">0%</span>
+            </div>
+            <div class="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+              <div id="burn-bar" class="h-full brand-gradient transition-all" style="width: 0%"></div>
+            </div>
+            <p id="burn-eta" class="text-xs text-slate-500"></p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { initEditor } from './editorClient';
+  initEditor();
+</script>

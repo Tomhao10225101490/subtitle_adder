@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: #0B1120;
+  color: #E2E8F0;
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+.brand-gradient {
+  background: linear-gradient(135deg, #F97316 0%, #EF4444 100%);
+}
+
+.brand-gradient-text {
+  background: linear-gradient(135deg, #F97316 0%, #EF4444 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.btn-burn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-radius: 0.625rem;
+  background: linear-gradient(135deg, #F97316 0%, #EF4444 100%);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  text-decoration: none;
+}
+
+.btn-burn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.4);
+}
+
+.btn-burn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  font-weight: 500;
+  font-size: 0.8125rem;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #E2E8F0;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  border-color: #F97316;
+  background: rgba(249, 115, 22, 0.08);
+}
+
+.btn-ghost:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.dropzone {
+  border: 2px dashed rgba(148, 163, 184, 0.3);
+  border-radius: 1rem;
+  background: rgba(30, 41, 59, 0.4);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.dropzone:hover,
+.dropzone.is-dragover {
+  border-color: #F97316;
+  background: rgba(249, 115, 22, 0.05);
+}
+
+.mono {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.caption-row.is-active {
+  border-color: #F97316;
+  background: rgba(249, 115, 22, 0.08);
+}
+
+.timeline-block.is-active {
+  background: #F97316;
+}
+
+@media (pointer: coarse) {
+  select,
+  textarea,
+  input[type="text"],
+  input[type="number"],
+  input[type="search"] {
+    font-size: 16px !important;
+  }
+}

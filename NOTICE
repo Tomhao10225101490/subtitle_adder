@@ -1,0 +1,10 @@
+# Third-party notices
+
+This project is based on [BurnSub](https://github.com/Xley9/burnsub)
+(MIT License, Copyright (c) 2026 Atilla Kürük).
+
+The local transcription, canvas subtitle renderer, and WebCodecs / MediaRecorder
+burn pipelines were adapted from that codebase.
+
+Product flow was inspired by subvid.app, but this repository does **not** include
+any source code from midudev/subvid.app (PolyForm Noncommercial).
