@@ -163,8 +163,14 @@ export async function burnVideo(opts: BurnOptions, onProgress?: (p: BurnProgress
   v.muted = false;       // need audio to be captured. Browser blocks autoplay-with-sound without user gesture, but burn is triggered by click.
   v.volume = 1.0;        // captured audio level (doesn't affect playback to user)
   v.currentTime = 0;
-  await new Promise<void>(r => {
-    const onSeeked = () => { v.removeEventListener('seeked', onSeeked); r(); };
+  await new Promise<void>((resolve) => {
+    const finish = () => {
+      v.removeEventListener('seeked', onSeeked);
+      clearTimeout(timer);
+      resolve();
+    };
+    const onSeeked = () => finish();
+    const timer = setTimeout(finish, 800);
     v.addEventListener('seeked', onSeeked);
   });
 
@@ -255,7 +261,7 @@ export async function burnVideo(opts: BurnOptions, onProgress?: (p: BurnProgress
       await v.play();
     } catch (e: any) {
       stopped = true;
-      reject(new Error('Browser blocked playback. Try interacting with the page first, then burn again. (' + (e?.message ?? '') + ')'));
+      reject(new Error('浏览器拦截了播放。请先点一下页面，再重新烧录。（' + (e?.message ?? '') + '）'));
       return;
     }
     requestAnimationFrame(drawFrame);

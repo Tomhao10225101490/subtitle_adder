@@ -18,7 +18,7 @@ export interface LoadProgress {
 /** Load the file into a video element. Resolves once metadata is available. */
 export async function loadVideoFile(file: File, onProgress?: (p: LoadProgress) => void): Promise<LoadedVideo> {
   if (!file.type.startsWith('video/') && !/\.(mp4|mov|webm|mkv|m4v)$/i.test(file.name)) {
-    throw new Error(`Not a video file: ${file.name}`);
+    throw new Error(`这不是视频文件：${file.name}`);
   }
   onProgress?.({ stage: 'reading', percent: 5 });
 
@@ -42,10 +42,10 @@ export async function loadVideoFile(file: File, onProgress?: (p: LoadProgress) =
       // Matroska is the common case here: browsers don't decode .mkv, so point at the
       // one-line remux instead of a generic codec error.
       if (/\.mkv$/i.test(file.name)) {
-        reject(new Error('Browsers cannot decode MKV. Remux it to MP4 first (no re-encode, seconds): ffmpeg -i "' + file.name + '" -c copy out.mp4'));
+        reject(new Error('浏览器无法直接播放 MKV。请先转成 MP4：ffmpeg -i "' + file.name + '" -c copy out.mp4'));
         return;
       }
-      reject(new Error('Video failed to decode — unsupported codec? (' + (videoEl.error?.message || 'unknown') + ')'));
+      reject(new Error('视频无法解码，编码可能不受支持（' + (videoEl.error?.message || '未知错误') + '）'));
     };
     videoEl.addEventListener('loadedmetadata', onLoaded);
     videoEl.addEventListener('error', onError);
@@ -75,14 +75,17 @@ export async function loadVideoFile(file: File, onProgress?: (p: LoadProgress) =
     });
   }
 
-  // Seek to first frame to ensure the decoder has a frame ready
+  // Seek to first frame to ensure the decoder has a frame ready.
   await new Promise<void>(resolve => {
-    const onSeeked = () => {
+    const finish = () => {
       videoEl.removeEventListener('seeked', onSeeked);
+      clearTimeout(timer);
       resolve();
     };
+    const onSeeked = () => finish();
+    const timer = setTimeout(finish, 1500);
     videoEl.addEventListener('seeked', onSeeked);
-    try { videoEl.currentTime = 0.01; } catch { resolve(); }
+    try { videoEl.currentTime = 0.01; } catch { finish(); }
   });
 
   onProgress?.({ stage: 'ready', percent: 100 });
@@ -112,7 +115,7 @@ export async function extractAudioForWhisper(file: File, onProgress?: (p: number
     decoded = await tempCtx.decodeAudioData(arrayBuffer.slice(0));
   } catch (e: any) {
     tempCtx.close().catch(() => {});
-    throw new Error('Could not decode audio track — try MP4/MOV/WebM with AAC or Opus audio. (' + (e?.message || 'decode error') + ')');
+    throw new Error('无法解码音轨，请使用带 AAC / Opus 音频的 MP4、MOV 或 WebM。（' + (e?.message || '解码失败') + '）');
   }
   tempCtx.close().catch(() => {});
   onProgress?.(50);

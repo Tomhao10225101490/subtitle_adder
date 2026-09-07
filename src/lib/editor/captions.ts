@@ -20,19 +20,42 @@ export function activeCaptionIndex(lines: CaptionLine[], t: number): number {
   return -1;
 }
 
+const CJK = /[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]/;
+
+export function splitTextAtRatio(text: string, ratio: number): [string, string] {
+  const trimmed = text.trim();
+  const spaceParts = trimmed.split(/\s+/).filter(Boolean);
+  if (spaceParts.length >= 2) {
+    const cut = Math.max(1, Math.min(spaceParts.length - 1, Math.round(spaceParts.length * ratio)));
+    return [spaceParts.slice(0, cut).join(' '), spaceParts.slice(cut).join(' ')];
+  }
+  const chars = [...trimmed];
+  if (chars.length < 2) return [trimmed, ''];
+  const cut = Math.max(1, Math.min(chars.length - 1, Math.round(chars.length * ratio)));
+  return [chars.slice(0, cut).join(''), chars.slice(cut).join('')];
+}
+
+export function joinCaptionText(a: string, b: string): string {
+  const left = a.trim();
+  const right = b.trim();
+  if (!left) return right;
+  if (!right) return left;
+  if (CJK.test(left.slice(-1)) || CJK.test(right[0])) return left + right;
+  return `${left} ${right}`;
+}
+
 export function splitCaptionAt(lines: CaptionLine[], index: number, atSec: number): CaptionLine[] {
   const next = cloneCaptions(lines);
   const line = next[index];
   if (!line) return next;
+  const duration = line.end - line.start;
+  if (duration < 0.4) return next;
   const t = Math.min(Math.max(atSec, line.start + 0.15), line.end - 0.15);
-  const ratio = (t - line.start) / Math.max(0.01, line.end - line.start);
-  const words = line.text.split(/\s+/).filter(Boolean);
-  const cut = Math.max(1, Math.min(words.length - 1, Math.round(words.length * ratio)));
-  const leftText = words.slice(0, cut).join(' ') || line.text;
-  const rightText = words.slice(cut).join(' ') || line.text;
-  const left: CaptionLine = { start: line.start, end: t, text: leftText };
-  const right: CaptionLine = { start: t, end: line.end, text: rightText };
-  next.splice(index, 1, left, right);
+  if (t <= line.start + 0.05 || t >= line.end - 0.05) return next;
+  const ratio = (t - line.start) / Math.max(0.01, duration);
+  const [leftText, rightText] = splitTextAtRatio(line.text, ratio);
+  if (!leftText || !rightText) return next;
+  next.splice(index, 1, { start: line.start, end: t, text: leftText }, { start: t, end: line.end, text: rightText });
   return next;
 }
 
@@ -44,7 +67,7 @@ export function mergeCaptionWithNext(lines: CaptionLine[], index: number): Capti
   next.splice(index, 2, {
     start: a.start,
     end: b.end,
-    text: `${a.text} ${b.text}`.replace(/\s+/g, ' ').trim()
+    text: joinCaptionText(a.text, b.text)
   });
   return next;
 }

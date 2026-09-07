@@ -104,6 +104,41 @@ export function initEditor() {
   const strokeWidthVal = document.getElementById('stroke-width-val')!;
   const offsetVal = document.getElementById('offset-val')!;
 
+  let busy = false;
+  let lastHighlightKey = '';
+
+  function escapeHtml(s: string) {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function waitMedia(el: HTMLMediaElement, event: string, ms: number) {
+    if (event === 'loadeddata' && el.readyState >= 2) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const finish = () => {
+        clearTimeout(timer);
+        el.removeEventListener(event, onEv);
+        resolve();
+      };
+      const onEv = () => finish();
+      const timer = setTimeout(finish, ms);
+      el.addEventListener(event, onEv);
+    });
+  }
+
+  function setBusy(next: boolean) {
+    busy = next;
+    captionBtn.disabled = busy || !loadedVideo;
+    resetBtn.disabled = busy;
+    undoBtn.disabled = busy || !history.canUndo;
+    redoBtn.disabled = busy || !history.canRedo;
+    if (!busy) syncBurnState();
+    else burnBtn.disabled = true;
+  }
+
   function showStatus(text: string) {
     previewStatus.textContent = text;
     previewStatus.classList.remove('hidden');
@@ -118,6 +153,10 @@ export function initEditor() {
       history.commit(captions);
       syncHistoryButtons();
     }, 350);
+  }
+
+  function clearPendingCommit() {
+    window.clearTimeout(commitTimer);
   }
 
   function syncHistoryButtons() {
@@ -215,7 +254,7 @@ export function initEditor() {
           <span class="ml-auto text-[10px] text-slate-600">${(c.end - c.start).toFixed(1)}s</span>
           <button type="button" data-del="${i}" class="text-red-400 hover:text-red-300 text-xs">删除</button>
         </div>
-        <textarea data-i="${i}" data-k="text" rows="2" class="cap-edit w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white">${c.text.replace(/</g, '&lt;')}</textarea>
+        <textarea data-i="${i}" data-k="text" rows="2" class="cap-edit w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white">${escapeHtml(c.text)}</textarea>
       </div>
     `).join('');
 
@@ -249,6 +288,7 @@ export function initEditor() {
       });
     });
     highlightActive(-1);
+    lastHighlightKey = '';
   }
 
   function renderTimeline() {
@@ -261,7 +301,7 @@ export function initEditor() {
     timelineBlocks.innerHTML = captions.map((c, i) => {
       const left = Math.max(0, (c.start / duration) * 100);
       const width = Math.max(0.6, ((c.end - c.start) / duration) * 100);
-      return `<button type="button" data-tl="${i}" class="timeline-block absolute top-1 bottom-1 rounded-sm bg-orange-400/70 hover:bg-orange-300 ${i === selectedIndex ? 'is-active' : ''}" style="left:${left}%;width:${width}%;" title="${c.text.replace(/"/g, '&quot;')}"></button>`;
+      return `<button type="button" data-tl="${i}" class="timeline-block absolute top-1 bottom-1 rounded-sm bg-orange-400/70 hover:bg-orange-300 ${i === selectedIndex ? 'is-active' : ''}" style="left:${left}%;width:${width}%;" title="${escapeHtml(c.text)}"></button>`;
     }).join('');
     timelineBlocks.querySelectorAll<HTMLButtonElement>('button[data-tl]').forEach((btn) => {
       btn.addEventListener('click', (ev) => {
@@ -291,6 +331,9 @@ export function initEditor() {
 
   function highlightActive(playbackIndex: number) {
     const current = playbackIndex >= 0 ? playbackIndex : selectedIndex;
+    const key = `${selectedIndex}:${current}`;
+    if (key === lastHighlightKey) return;
+    lastHighlightKey = key;
     document.querySelectorAll('.caption-row').forEach((el) => {
       const i = el.getAttribute('data-row');
       el.classList.toggle('is-active', i === String(selectedIndex) || i === String(current));
@@ -337,22 +380,27 @@ export function initEditor() {
     rafId = requestAnimationFrame(tick);
   }
 
-  async function openEditor(file: File) {
+  async function openEditor(file: File): Promise<boolean> {
     if (compat.blockers.length) {
       alert('当前浏览器缺少必要能力，请换用 Chrome 113+ 或 Edge。');
-      return;
+      return false;
     }
+    if (busy) return false;
+    setBusy(true);
     showStatus('正在读取视频…');
     try {
+      const next = await loadVideoFile(file, (p) => showStatus(`正在读取… ${p.percent ?? ''}%`));
       if (loadedVideo) revokeLoaded(loadedVideo);
-      loadedVideo = await loadVideoFile(file, (p) => showStatus(`正在读取… ${p.percent ?? ''}%`));
+      loadedVideo = next;
     } catch (e: any) {
       alert(e?.message || '无法打开视频');
       hideStatus();
-      return;
+      setBusy(false);
+      return false;
     }
 
-    fileName.textContent = file.name;
+    try {
+      fileName.textContent = file.name;
     fileMeta.textContent = `${loadedVideo.width}×${loadedVideo.height} · ${fmtTime(loadedVideo.durationSec)} · ${fmtSize(file.size)}`;
     previewCanvas.width = loadedVideo.width;
     previewCanvas.height = loadedVideo.height;
@@ -361,14 +409,14 @@ export function initEditor() {
       previewWrap.style.aspectRatio = `${loadedVideo.width} / ${loadedVideo.height}`;
     }
     hiddenVideo.src = loadedVideo.url;
+    hiddenVideo.muted = true;
     hiddenVideo.load();
-    await new Promise<void>((r) => hiddenVideo.addEventListener('loadeddata', () => r(), { once: true }));
+    await waitMedia(hiddenVideo, 'loadeddata', 4000);
     hiddenVideo.currentTime = 0.01;
-    await new Promise<void>((r) => hiddenVideo.addEventListener('seeked', () => r(), { once: true }));
+    await waitMedia(hiddenVideo, 'seeked', 1500);
 
     stageDrop.classList.add('hidden');
     stageEditor.classList.remove('hidden');
-    captionBtn.disabled = false;
     seekBar.max = String(loadedVideo.durationSec);
     timeDisplay.textContent = `0:00 / ${fmtTime(loadedVideo.durationSec)}`;
     hideStatus();
@@ -383,11 +431,18 @@ export function initEditor() {
       captionStatus.textContent = '可以自动识别，或导入已有字幕';
       renderCaptionsList();
       renderTimeline();
-      syncBurnState();
       syncHistoryButtons();
     }
     drawPreview(0);
     startPreviewLoop();
+    return true;
+    } catch (e: any) {
+      alert(e?.message || '无法打开视频');
+      hideStatus();
+      return false;
+    } finally {
+      setBusy(false);
+    }
   }
 
   function applyLoadedProject(project: ReturnType<typeof parseProject>, currentFileName: string) {
@@ -406,13 +461,52 @@ export function initEditor() {
     }
   }
 
+  async function handleIncomingFile(file: File) {
+    if (busy) {
+      alert('正在处理中，请稍候。');
+      return;
+    }
+    if (/\.(srt|vtt)$/i.test(file.name)) {
+      if (!loadedVideo) {
+        alert('请先打开视频，再导入 SRT / VTT。');
+        return;
+      }
+      try {
+        const result = await importSubtitleFile(file);
+        if (captions.length > 0 && !confirm(`用 ${file.name} 里的 ${result.captions.length} 条替换当前 ${captions.length} 条？`)) return;
+        history.reset([]);
+        setCaptions(result.captions, { selected: 0, status: `已从 ${result.format.toUpperCase()} 导入 ${result.captions.length} 条` });
+        if (result.warnings.length) alert(result.warnings.join('\n'));
+      } catch (e: any) {
+        alert('导入失败：' + (e?.message || '未知错误'));
+      }
+      return;
+    }
+    if (/\.json$/i.test(file.name) || /\.project\.json$/i.test(file.name)) {
+      try {
+        const project = parseProject(await file.text());
+        if (!loadedVideo) {
+          pendingProject = project;
+          alert(`工程已读取（${project.captions.length} 条字幕）。请再选择对应的视频「${project.videoFileName || '原视频'}」。`);
+          fileInput.click();
+          return;
+        }
+        applyLoadedProject(project, loadedVideo.file.name);
+      } catch (e: any) {
+        alert(e?.message || '无法打开工程文件');
+      }
+      return;
+    }
+    await openEditor(file);
+  }
+
   pickBtn.addEventListener('click', (ev) => {
     ev.stopPropagation();
     fileInput.click();
   });
   fileInput.addEventListener('change', () => {
     const f = fileInput.files?.[0];
-    if (f) openEditor(f);
+    if (f) handleIncomingFile(f);
   });
   stageDrop.addEventListener('click', (ev) => {
     if ((ev.target as HTMLElement).closest('button')) return;
@@ -428,7 +522,7 @@ export function initEditor() {
   }));
   stageDrop.addEventListener('drop', (ev) => {
     const f = (ev as DragEvent).dataTransfer?.files?.[0];
-    if (f) openEditor(f);
+    if (f) handleIncomingFile(f);
   });
 
   document.getElementById('try-sample')?.addEventListener('click', async (ev) => {
@@ -441,14 +535,17 @@ export function initEditor() {
       const resp = await fetch('/sample.mp4');
       if (!resp.ok) throw new Error('示例视频不可用');
       const blob = await resp.blob();
-      await openEditor(new File([blob], 'sample.mp4', { type: 'video/mp4' }));
+      const ok = await openEditor(new File([blob], 'sample.mp4', { type: 'video/mp4' }));
+      if (!ok) return;
       setCaptions([
         { start: 0.0, end: 1.5, text: '这是字幕加加' },
         { start: 1.5, end: 3.2, text: '识别错了可以直接改' },
         { start: 3.2, end: 4.8, text: '时间轴、文字、样式都能调' },
         { start: 4.8, end: 6.4, text: '最后导出已经配好字幕的视频' },
         { start: 6.4, end: 7.9, text: '现在试试你自己的视频吧' }
-      ], { selected: 0, status: '已载入示例字幕，改几个字再导出看看' });
+      ], { commit: false, selected: 0, status: '已载入示例字幕，改几个字再导出看看' });
+      history.reset(captions);
+      syncHistoryButtons();
     } catch (e: any) {
       alert('无法加载示例视频：' + (e?.message || '未知错误'));
     } finally {
@@ -505,16 +602,16 @@ export function initEditor() {
   });
 
   captionBtn.addEventListener('click', async () => {
-    if (!loadedVideo) return;
-    captionBtn.disabled = true;
+    if (!loadedVideo || busy) return;
+    setBusy(true);
     captionProgress.classList.remove('hidden');
     const setBar = (pct: number) => {
       captionBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
     };
     const dur = loadedVideo.durationSec;
     if (dur > 600 && !confirm(`这段视频大约 ${Math.round(dur / 60)} 分钟，识别可能要较长时间。继续吗？`)) {
-      captionBtn.disabled = false;
       captionProgress.classList.add('hidden');
+      setBusy(false);
       return;
     }
     try {
@@ -554,7 +651,7 @@ export function initEditor() {
       captionStatus.textContent = '识别失败';
       captionProgress.classList.add('hidden');
     } finally {
-      captionBtn.disabled = false;
+      setBusy(false);
     }
   });
 
@@ -648,6 +745,7 @@ export function initEditor() {
   });
 
   undoBtn.addEventListener('click', () => {
+    clearPendingCommit();
     const prev = history.undo();
     if (!prev) return;
     captions = prev;
@@ -657,6 +755,7 @@ export function initEditor() {
     syncHistoryButtons();
   });
   redoBtn.addEventListener('click', () => {
+    clearPendingCommit();
     const next = history.redo();
     if (!next) return;
     captions = next;
@@ -668,6 +767,8 @@ export function initEditor() {
   window.addEventListener('keydown', (ev) => {
     const meta = ev.metaKey || ev.ctrlKey;
     if (!meta) return;
+    const typing = (ev.target as HTMLElement | null)?.closest('input, textarea, select');
+    if (typing) return;
     if (ev.key.toLowerCase() === 'z' && !ev.shiftKey) {
       ev.preventDefault();
       undoBtn.click();
@@ -739,8 +840,11 @@ export function initEditor() {
   }
 
   burnBtn.addEventListener('click', async () => {
-    if (!loadedVideo || captions.length === 0) return;
-    burnBtn.disabled = true;
+    if (!loadedVideo || captions.length === 0 || busy) return;
+    setBusy(true);
+    isPlaying = false;
+    playPause.textContent = '播放';
+    hiddenVideo.pause();
     burnProgress.classList.remove('hidden');
     burnStage.textContent = '准备中…';
     burnPercent.textContent = '0%';
@@ -776,17 +880,26 @@ export function initEditor() {
       burnStage.textContent = '失败';
       burnEta.textContent = e?.message || '';
     } finally {
-      syncBurnState();
+      hiddenVideo.pause();
+      hiddenVideo.muted = userMuted;
+      muteToggle.textContent = userMuted ? '🔇' : '🔊';
+      isPlaying = false;
+      playPause.textContent = '播放';
+      setBusy(false);
     }
   });
 
   resetBtn.addEventListener('click', () => {
+    if (busy) return;
     if (loadedVideo) revokeLoaded(loadedVideo);
     loadedVideo = null;
     captions = [];
     selectedIndex = -1;
     pendingProject = null;
+    isPlaying = false;
+    playPause.textContent = '播放';
     history.reset([]);
+    clearPendingCommit();
     cancelAnimationFrame(rafId);
     hiddenVideo.src = '';
     fileInput.value = '';

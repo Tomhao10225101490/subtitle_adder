@@ -2,7 +2,7 @@
 // Mirrors the CSS preview from stylePreview.ts but draws onto a Canvas frame.
 
 import type { SubtitleStyle } from '../style';
-import type { CaptionLine, CaptionWord } from './whisper';
+import type { CaptionLine } from './whisper';
 
 export interface RenderContext {
   ctx: CanvasRenderingContext2D;

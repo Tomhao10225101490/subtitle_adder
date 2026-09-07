@@ -56,7 +56,7 @@ const CUE_LINE = /(-?[\d:.,]+)\s*-->\s*(-?[\d:.,]+)/;
  */
 export function parseSubtitles(text: string, filename = ''): ImportResult {
   if (typeof text !== 'string' || !text.trim()) {
-    throw new SubtitleParseError('The subtitle file is empty.');
+    throw new SubtitleParseError('字幕文件是空的。');
   }
 
   // Strip BOM, normalise line endings
@@ -97,8 +97,8 @@ export function parseSubtitles(text: string, filename = ''): ImportResult {
   if (captions.length === 0) {
     throw new SubtitleParseError(
       isVtt
-        ? 'No cues found — is this a valid .vtt file?'
-        : 'No cues found — is this a valid .srt file? Each cue needs a "00:00:01,000 --> 00:00:03,000" line.'
+        ? '没有读到字幕条目，请确认这是有效的 .vtt 文件。'
+        : '没有读到字幕条目，请确认这是有效的 .srt 文件。每一句需要类似 00:00:01,000 --> 00:00:03,000 的时间行。'
     );
   }
 
@@ -117,8 +117,8 @@ export function parseSubtitles(text: string, filename = ''): ImportResult {
     }
   }
 
-  if (skipped > 0) warnings.push(`${skipped} block${skipped === 1 ? '' : 's'} skipped (no readable timing or text).`);
-  if (overlaps > 0) warnings.push(`${overlaps} overlapping cue${overlaps === 1 ? '' : 's'} trimmed so they display one at a time.`);
+  if (skipped > 0) warnings.push(`有 ${skipped} 段没有可读的时间或文字，已跳过。`);
+  if (overlaps > 0) warnings.push(`有 ${overlaps} 处时间重叠，已自动收成一句一条。`);
 
   return { captions, format: isVtt ? 'vtt' : 'srt', warnings };
 }
@@ -126,16 +126,16 @@ export function parseSubtitles(text: string, filename = ''): ImportResult {
 /** Read a File and parse it. Throws SubtitleParseError with a user-facing message. */
 export async function importSubtitleFile(file: File): Promise<ImportResult> {
   if (!/\.(srt|vtt)$/i.test(file.name)) {
-    throw new SubtitleParseError(`${file.name} is not a .srt or .vtt file.`);
+    throw new SubtitleParseError(`${file.name} 不是 .srt 或 .vtt 文件。`);
   }
   if (file.size > 5 * 1024 * 1024) {
-    throw new SubtitleParseError('Subtitle file is unexpectedly large (over 5 MB).');
+    throw new SubtitleParseError('字幕文件过大（超过 5 MB）。');
   }
   let text: string;
   try {
     text = await file.text();
   } catch {
-    throw new SubtitleParseError('Could not read the subtitle file.');
+    throw new SubtitleParseError('无法读取这个字幕文件。');
   }
   return parseSubtitles(text, file.name);
 }

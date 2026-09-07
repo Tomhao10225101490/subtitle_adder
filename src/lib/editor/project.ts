@@ -47,12 +47,14 @@ export function parseProject(text: string): CaptionProject {
     throw new Error('不是有效的工程文件：缺少 captions 数组。');
   }
 
-  const normalized: CaptionLine[] = captions.map((c: any, i: number) => {
+  const normalized: CaptionLine[] = [];
+  captions.forEach((c: any, i: number) => {
     const start = Number(c?.start);
     const end = Number(c?.end);
     const lineText = String(c?.text ?? '').trim();
-    if (!isFinite(start) || !isFinite(end) || !lineText) {
-      throw new Error(`第 ${i + 1} 条字幕缺少有效的时间或文本。`);
+    if (!lineText) return;
+    if (!isFinite(start) || !isFinite(end)) {
+      throw new Error(`第 ${i + 1} 条字幕缺少有效的时间。`);
     }
     const line: CaptionLine = {
       start: Math.max(0, start),
@@ -68,8 +70,11 @@ export function parseProject(text: string): CaptionProject {
         }))
         .filter((w: { start: number; end: number; text: string }) => isFinite(w.start) && isFinite(w.end) && w.text);
     }
-    return line;
+    normalized.push(line);
   });
+  if (normalized.length === 0) {
+    throw new Error('工程文件里没有有效字幕。');
+  }
 
   const incomingStyle = parsed?.style ?? {};
   const style: SubtitleStyle = { ...DEFAULT_STYLE, ...incomingStyle };

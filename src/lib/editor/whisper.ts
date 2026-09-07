@@ -80,9 +80,9 @@ export function loadWhisper(onProgress?: (p: LoadProgress) => void): Promise<Aut
         progress_callback: (info: any) => {
           if (info?.status === 'progress' && onProgress) {
             const pct = typeof info.progress === 'number' ? info.progress : 0;
-            onProgress({ status: 'downloading', file: info.file, percent: pct, message: `Downloading model: ${info.file ?? ''} (${Math.round(pct)}%)` });
+            onProgress({ status: 'downloading', file: info.file, percent: pct, message: `正在下载模型：${info.file ?? ''}（${Math.round(pct)}%）` });
           } else if (info?.status === 'ready' && onProgress) {
-            onProgress({ status: 'ready', percent: 100, message: `Model loaded on ${device.toUpperCase()}` });
+            onProgress({ status: 'ready', percent: 100, message: `模型已在 ${device.toUpperCase()} 上就绪` });
           }
         }
       } as any);
@@ -98,18 +98,18 @@ export function loadWhisper(onProgress?: (p: LoadProgress) => void): Promise<Aut
       // download and got nothing. Retry once on the CPU backend before giving up.
       if (useGpu) {
         console.warn('[SubtitleAdder Whisper] WebGPU load failed, retrying on WASM:', e);
-        onProgress?.({ status: 'downloading', percent: 0, message: 'GPU unavailable — falling back to CPU…' });
+        onProgress?.({ status: 'downloading', percent: 0, message: 'GPU 不可用，改用 CPU…' });
         try {
           return await attempt('wasm', CPU_DTYPE);
         } catch (e2: any) {
           whisperPromise = null;
-          onProgress?.({ status: 'error', message: e2?.message ?? 'Failed to load Whisper.' });
+          onProgress?.({ status: 'error', message: e2?.message ?? 'Whisper 模型加载失败。' });
           throw e2;
         }
       }
       console.error('[SubtitleAdder Whisper] Load failed:', e);
       whisperPromise = null;
-      onProgress?.({ status: 'error', message: e?.message ?? 'Failed to load Whisper.' });
+      onProgress?.({ status: 'error', message: e?.message ?? 'Whisper 模型加载失败。' });
       throw e;
     }
   })();
@@ -141,7 +141,7 @@ export async function transcribe(
   language: string,
   onProgress?: (p: TranscribeProgress) => void
 ): Promise<CaptionLine[]> {
-  onProgress?.({ stage: 'preparing', percent: 5, message: 'Preparing audio for Whisper…' });
+  onProgress?.({ stage: 'preparing', percent: 5, message: '正在准备音频…' });
 
   // Silent input makes the model emit no tokens, and the tokenizer then fails with
   // "token_ids must be a non-empty array of integers" — a cryptic error for what is
@@ -163,7 +163,7 @@ export async function transcribe(
   // (An earlier 0.24x came from a near-silent 3 s clip and was mostly warm-up.)
   const speedMultiplier = activeDevice === 'webgpu' ? 7 : 0.7;
   const estSec = Math.round(audioSec / speedMultiplier);
-  onProgress?.({ stage: 'inferring', percent: 10, message: `Transcribing on ${(activeDevice || '').toUpperCase()} — about ${estSec}s for ${Math.round(audioSec)}s of audio. Don't close the tab.` });
+  onProgress?.({ stage: 'inferring', percent: 10, message: `正在用 ${(activeDevice || '').toUpperCase()} 识别，约 ${estSec} 秒（音频 ${Math.round(audioSec)} 秒）。请不要关掉这个标签页。` });
 
   // Run inference + simulate progress ramp so user sees activity
   const startTime = performance.now();
@@ -178,7 +178,7 @@ export async function transcribe(
       onProgress?.({
         stage: 'inferring',
         percent: projected,
-        message: `Transcribing… ~${Math.round(remaining)}s left (running on ${(activeDevice || '').toUpperCase()})`
+        message: `正在识别… 大约还要 ${Math.round(remaining)} 秒（${(activeDevice || '').toUpperCase()}）`
       });
     }
   })();
@@ -229,7 +229,7 @@ export async function transcribe(
     onProgress?.({ stage: 'done', percent: 100 });
     return wordLines;
   }
-  onProgress?.({ stage: 'finalizing', percent: 92, message: 'Cleaning up captions…' });
+  onProgress?.({ stage: 'finalizing', percent: 92, message: '正在整理字幕…' });
 
   const chunks = (result as any)?.chunks ?? [];
   const lines: CaptionLine[] = chunks
